@@ -1,0 +1,710 @@
+// Top-Down Arcade Racing Game with Enhanced Graphics/Textures
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreDiv = document.getElementById('score');
+let w = window.innerWidth, h = window.innerHeight;
+canvas.width = w; canvas.height = h;
+
+// Road/Lane Setup
+const roadWidth = 330;
+const laneCount = 3;
+const laneWidth = roadWidth / laneCount;
+const roadLeft = () => w/2 - roadWidth/2;
+
+// Car Sizing
+const CAR_WIDTH = 54;
+const CAR_HEIGHT = 84;
+const TRUCK_WIDTH = 62;
+const TRUCK_HEIGHT = 120;
+
+// Road Texture
+function drawRoad() {
+  let roadGrad = ctx.createLinearGradient(roadLeft(), 0, roadLeft() + roadWidth, 0);
+  roadGrad.addColorStop(0, "#23272b");
+  roadGrad.addColorStop(0.5, "#181b1e");
+  roadGrad.addColorStop(1, "#23272b");
+  ctx.fillStyle = roadGrad;
+  ctx.fillRect(roadLeft(), 0, roadWidth, h);
+
+  // Subtle worn lines
+  ctx.save();
+  ctx.globalAlpha = 0.10;
+  for (let i = 0; i < 18; ++i) {
+    ctx.beginPath();
+    let rx = roadLeft() + 16 + Math.random()*(roadWidth-32);
+    ctx.moveTo(rx, 0);
+    ctx.lineTo(rx+Math.random()*8-4, h);
+    ctx.lineWidth = 2+Math.random()*2;
+    ctx.strokeStyle = "#eee";
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Lane markings
+  ctx.setLineDash([28, 22]);
+  ctx.lineWidth = 5;
+  for (let i = 1; i < laneCount; i++) {
+    let x = roadLeft() + i*laneWidth;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.strokeStyle = "#ffe082";
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // Road edge lines
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(roadLeft(), 0);
+  ctx.lineTo(roadLeft(), h);
+  ctx.strokeStyle = "#fff";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(roadLeft()+roadWidth, 0);
+  ctx.lineTo(roadLeft()+roadWidth, h);
+  ctx.stroke();
+}
+
+// Grass Edge Texture
+function drawGrass() {
+  let grassGradL = ctx.createLinearGradient(0,0,roadLeft(),0);
+  grassGradL.addColorStop(0,"#205c1c");
+  grassGradL.addColorStop(1,"#3c992e");
+  ctx.fillStyle = grassGradL;
+  ctx.fillRect(0,0,roadLeft(),h);
+  let grassGradR = ctx.createLinearGradient(w,0,roadLeft()+roadWidth,0);
+  grassGradR.addColorStop(0,"#205c1c");
+  grassGradR.addColorStop(1,"#3c992e");
+  ctx.fillStyle = grassGradR;
+  ctx.fillRect(roadLeft()+roadWidth,0,w-(roadLeft()+roadWidth),h);
+  for (let i=0; i<40; ++i) {
+    let gx = Math.random()<0.5
+      ? Math.random()*(roadLeft()-12)+6
+      : roadLeft()+roadWidth+6+Math.random()*(w-roadLeft()-roadWidth-12);
+    let gy = Math.random()*h;
+    ctx.beginPath();
+    ctx.arc(gx,gy,Math.random()<0.7?1.3:2.1,0,2*Math.PI);
+    ctx.fillStyle = Math.random()<0.6?"#d0ffb6":"#ff4444";
+    ctx.fill();
+  }
+}
+
+// Trees
+let trees = [];
+function addTrees() {
+  trees = [];
+  const left = roadLeft()-46, right = roadLeft()+roadWidth+46;
+  const rows = Math.floor(h/70);
+  for (let i = 0; i < rows; i++) {
+    let y = (i * (h/rows));
+    trees.push({x: left, y: y + ((i%2)*18)});
+    trees.push({x: right, y: y + (((i+1)%2)*18)});
+  }
+}
+function drawTree(x, y) {
+  ctx.save();
+  ctx.fillStyle = "#804a23";
+  ctx.fillRect(x-4, y+13, 8, 14);
+  ctx.beginPath();
+  ctx.arc(x, y+2, 17, 0, 2 * Math.PI);
+  ctx.fillStyle = "#1b6a12";
+  ctx.shadowColor = "#000";
+  ctx.shadowBlur = 12;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x-6, y-4, 8, 0, 2 * Math.PI);
+  ctx.fillStyle = "#36cc2f";
+  ctx.shadowBlur = 0;
+  ctx.fill();
+  ctx.restore();
+}
+
+// Car Drawing Functions
+
+function drawRedSportsCar(ctx, x, y, w = CAR_WIDTH, h = CAR_HEIGHT) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha = 0.23;
+  ctx.beginPath();
+  ctx.ellipse(0, h*0.18, w*0.48, h*0.18, 0, 0, 2*Math.PI);
+  ctx.fillStyle = "#111";
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  let grad = ctx.createLinearGradient(0, -h/2, 0, h/2);
+  grad.addColorStop(0, "#ff5151");
+  grad.addColorStop(0.4, "#d50000");
+  grad.addColorStop(1, "#a10000");
+  ctx.beginPath();
+  ctx.moveTo(-w/2+9, -h/2+13);
+  ctx.lineTo(-w/2+10, h/2-12);
+  ctx.lineTo(w/2-10, h/2-12);
+  ctx.lineTo(w/2-9, -h/2+13);
+  ctx.quadraticCurveTo(w/2, -h/2+7, w/2-13, -h/2+5);
+  ctx.lineTo(-w/2+13, -h/2+5);
+  ctx.quadraticCurveTo(-w/2, -h/2+7, -w/2+9, -h/2+13);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.lineWidth = 3.2;
+  ctx.strokeStyle = "#191919";
+  ctx.stroke();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-w/2+8, -h/2+22);
+  ctx.lineTo(-w/2+16, -h/2+40);
+  ctx.lineTo(-w/2+21, -h/2+38);
+  ctx.lineTo(-w/2+13, -h/2+19);
+  ctx.closePath();
+  ctx.fillStyle = "#191919";
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(w/2-8, -h/2+22);
+  ctx.lineTo(w/2-16, -h/2+40);
+  ctx.lineTo(w/2-21, -h/2+38);
+  ctx.lineTo(w/2-13, -h/2+19);
+  ctx.closePath();
+  ctx.fillStyle = "#191919";
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(-w/2+8, -h/2+27, 3, 6.1, Math.PI/8, 0, 2*Math.PI);
+  ctx.ellipse(w/2-8, -h/2+27, 3, 6.1, -Math.PI/8, 0, 2*Math.PI);
+  ctx.fillStyle = "#ff5151";
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = "#191919";
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-w/4, -h/2+14);
+  ctx.lineTo(-w/4+3, -h/2+32);
+  ctx.lineTo(w/4-3, -h/2+32);
+  ctx.lineTo(w/4, -h/2+14);
+  ctx.closePath();
+  ctx.fillStyle = "#20272e";
+  ctx.globalAlpha = 0.92;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "#191919";
+  ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-w/7, -h/2+32);
+  ctx.lineTo(-w/7, -h/2+54);
+  ctx.lineTo(w/7, -h/2+54);
+  ctx.lineTo(w/7, -h/2+32);
+  ctx.closePath();
+  ctx.fillStyle = "#191919";
+  ctx.globalAlpha = 0.93;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(-2.5, -h/2+28, 5, 18);
+  ctx.fillStyle = "#ffadad";
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-w/4, -h/2+56);
+  ctx.lineTo(-w/4+3, -h/2+68);
+  ctx.lineTo(w/4-3, -h/2+68);
+  ctx.lineTo(w/4, -h/2+56);
+  ctx.closePath();
+  ctx.fillStyle = "#20272e";
+  ctx.globalAlpha = 0.93;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "#191919";
+  ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = "#ffe082";
+  ctx.fillRect(-w/6, h/2-13, w/12, 7);
+  ctx.fillRect(w/12, h/2-13, w/12, 7);
+  ctx.fillStyle = "#ff5252";
+  ctx.fillRect(-w/6, -h/2+6, w/12, 6);
+  ctx.fillRect(w/12, -h/2+6, w/12, 6);
+  ctx.restore();
+}
+
+function drawBlueSportsCar(ctx, x, y, w = CAR_WIDTH, h = CAR_HEIGHT) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha = 0.23;
+  ctx.beginPath();
+  ctx.ellipse(0, h*0.18, w*0.48, h*0.18, 0, 0, 2*Math.PI);
+  ctx.fillStyle = "#111";
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  let grad = ctx.createLinearGradient(0, -h/2, 0, h/2);
+  grad.addColorStop(0, "#6ec1ff");
+  grad.addColorStop(0.4, "#1565c0");
+  grad.addColorStop(1, "#00387a");
+  ctx.beginPath();
+  ctx.moveTo(-w/2+9, -h/2+13);
+  ctx.lineTo(-w/2+10, h/2-12);
+  ctx.lineTo(w/2-10, h/2-12);
+  ctx.lineTo(w/2-9, -h/2+13);
+  ctx.quadraticCurveTo(w/2, -h/2+7, w/2-13, -h/2+5);
+  ctx.lineTo(-w/2+13, -h/2+5);
+  ctx.quadraticCurveTo(-w/2, -h/2+7, -w/2+9, -h/2+13);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.lineWidth = 3.2;
+  ctx.strokeStyle = "#191919";
+  ctx.stroke();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-w/2+8, -h/2+22);
+  ctx.lineTo(-w/2+16, -h/2+40);
+  ctx.lineTo(-w/2+21, -h/2+38);
+  ctx.lineTo(-w/2+13, -h/2+19);
+  ctx.closePath();
+  ctx.fillStyle = "#191919";
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(w/2-8, -h/2+22);
+  ctx.lineTo(w/2-16, -h/2+40);
+  ctx.lineTo(w/2-21, -h/2+38);
+  ctx.lineTo(w/2-13, -h/2+19);
+  ctx.closePath();
+  ctx.fillStyle = "#191919";
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(-w/2+8, -h/2+27, 3, 6.1, Math.PI/8, 0, 2*Math.PI);
+  ctx.ellipse(w/2-8, -h/2+27, 3, 6.1, -Math.PI/8, 0, 2*Math.PI);
+  ctx.fillStyle = "#6ec1ff";
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = "#191919";
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-w/4, -h/2+14);
+  ctx.lineTo(-w/4+3, -h/2+32);
+  ctx.lineTo(w/4-3, -h/2+32);
+  ctx.lineTo(w/4, -h/2+14);
+  ctx.closePath();
+  ctx.fillStyle = "#20272e";
+  ctx.globalAlpha = 0.92;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "#191919";
+  ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-w/7, -h/2+32);
+  ctx.lineTo(-w/7, -h/2+54);
+  ctx.lineTo(w/7, -h/2+54);
+  ctx.lineTo(w/7, -h/2+32);
+  ctx.closePath();
+  ctx.fillStyle = "#191919";
+  ctx.globalAlpha = 0.93;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(-2.5, -h/2+28, 5, 18);
+  ctx.fillStyle = "#b3e5fc";
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-w/4, -h/2+56);
+  ctx.lineTo(-w/4+3, -h/2+68);
+  ctx.lineTo(w/4-3, -h/2+68);
+  ctx.lineTo(w/4, -h/2+56);
+  ctx.closePath();
+  ctx.fillStyle = "#20272e";
+  ctx.globalAlpha = 0.93;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "#191919";
+  ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = "#ffe082";
+  ctx.fillRect(-w/6, h/2-13, w/12, 7);
+  ctx.fillRect(w/12, h/2-13, w/12, 7);
+  ctx.fillStyle = "#ff5252";
+  ctx.fillRect(-w/6, -h/2+6, w/12, 6);
+  ctx.fillRect(w/12, -h/2+6, w/12, 6);
+  ctx.restore();
+}
+
+function drawWhiteSportsCar(ctx, x, y, w = CAR_WIDTH, h = CAR_HEIGHT) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha = 0.23;
+  ctx.beginPath();
+  ctx.ellipse(0, h*0.18, w*0.48, h*0.18, 0, 0, 2*Math.PI);
+  ctx.fillStyle = "#111";
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  let grad = ctx.createLinearGradient(0, -h/2, 0, h/2);
+  grad.addColorStop(0, "#f8f9fc");
+  grad.addColorStop(0.35, "#eeeeee");
+  grad.addColorStop(1, "#cccccc");
+  ctx.beginPath();
+  ctx.moveTo(-w/2+9, -h/2+13);
+  ctx.lineTo(-w/2+10, h/2-12);
+  ctx.lineTo(w/2-10, h/2-12);
+  ctx.lineTo(w/2-9, -h/2+13);
+  ctx.quadraticCurveTo(w/2, -h/2+7, w/2-13, -h/2+5);
+  ctx.lineTo(-w/2+13, -h/2+5);
+  ctx.quadraticCurveTo(-w/2, -h/2+7, -w/2+9, -h/2+13);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.lineWidth = 3.2;
+  ctx.strokeStyle = "#191919";
+  ctx.stroke();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-w/2+8, -h/2+22);
+  ctx.lineTo(-w/2+16, -h/2+40);
+  ctx.lineTo(-w/2+21, -h/2+38);
+  ctx.lineTo(-w/2+13, -h/2+19);
+  ctx.closePath();
+  ctx.fillStyle = "#191919";
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(w/2-8, -h/2+22);
+  ctx.lineTo(w/2-16, -h/2+40);
+  ctx.lineTo(w/2-21, -h/2+38);
+  ctx.lineTo(w/2-13, -h/2+19);
+  ctx.closePath();
+  ctx.fillStyle = "#191919";
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(-w/2+8, -h/2+27, 3, 6.1, Math.PI/8, 0, 2*Math.PI);
+  ctx.ellipse(w/2-8, -h/2+27, 3, 6.1, -Math.PI/8, 0, 2*Math.PI);
+  ctx.fillStyle = "#f8f9fc";
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = "#191919";
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-w/4, -h/2+14);
+  ctx.lineTo(-w/4+3, -h/2+32);
+  ctx.lineTo(w/4-3, -h/2+32);
+  ctx.lineTo(w/4, -h/2+14);
+  ctx.closePath();
+  ctx.fillStyle = "#20272e";
+  ctx.globalAlpha = 0.92;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "#191919";
+  ctx.stroke();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-w/7, -h/2+32);
+  ctx.lineTo(-w/7, -h/2+54);
+  ctx.lineTo(w/7, -h/2+54);
+  ctx.lineTo(w/7, -h/2+32);
+  ctx.closePath();
+  ctx.fillStyle = "#191919";
+  ctx.globalAlpha = 0.93;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(-2.5, -h/2+28, 5, 18);
+  ctx.fillStyle = "#b3e5fc";
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(-w/4, -h/2+56);
+  ctx.lineTo(-w/4+3, -h/2+68);
+  ctx.lineTo(w/4-3, -h/2+68);
+  ctx.lineTo(w/4, -h/2+56);
+  ctx.closePath();
+  ctx.fillStyle = "#20272e";
+  ctx.globalAlpha = 0.93;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "#191919";
+  ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = "#ffe082";
+  ctx.fillRect(-w/6, h/2-13, w/12, 7);
+  ctx.fillRect(w/12, h/2-13, w/12, 7);
+  ctx.fillStyle = "#ff5252";
+  ctx.fillRect(-w/6, -h/2+6, w/12, 6);
+  ctx.fillRect(w/12, -h/2+6, w/12, 6);
+  ctx.restore();
+}
+
+// Truck (arcade style, white cab, gray trailer)
+function drawTruckCar(ctx, x, y, w = TRUCK_WIDTH, h = TRUCK_HEIGHT) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha = 0.18;
+  ctx.beginPath();
+  ctx.ellipse(0, h*0.22, w*0.50, h*0.23, 0, 0, 2*Math.PI);
+  ctx.fillStyle = "#111";
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  let grad = ctx.createLinearGradient(0, -h/2+36, 0, h/2-10);
+  grad.addColorStop(0,"#ececec");
+  grad.addColorStop(1,"#b0bec5");
+  ctx.beginPath();
+  ctx.moveTo(-w/2+7, -h/2+36);
+  ctx.lineTo(-w/2+9, h/2-10);
+  ctx.lineTo(w/2-9, h/2-10);
+  ctx.lineTo(w/2-7, -h/2+36);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#191919";
+  ctx.stroke();
+  ctx.save();
+  ctx.strokeStyle = "#bdbdbd";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-w/2+13, -h/2+62);
+  ctx.lineTo(w/2-13, -h/2+62);
+  ctx.moveTo(-w/2+13, h/2-32);
+  ctx.lineTo(w/2-13, h/2-32);
+  ctx.stroke();
+  ctx.restore();
+  ctx.beginPath();
+  ctx.moveTo(-w/2+9, -h/2+12);
+  ctx.lineTo(-w/2+11, -h/2+36);
+  ctx.lineTo(w/2-11, -h/2+36);
+  ctx.lineTo(w/2-9, -h/2+12);
+  ctx.quadraticCurveTo(w/2, -h/2+6, w/2-13, -h/2+3);
+  ctx.lineTo(-w/2+13, -h/2+3);
+  ctx.quadraticCurveTo(-w/2, -h/2+6, -w/2+9, -h/2+12);
+  ctx.closePath();
+  ctx.fillStyle = "#fafafa";
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-w/4, -h/2+15);
+  ctx.lineTo(-w/4+3, -h/2+28);
+  ctx.lineTo(w/4-3, -h/2+28);
+  ctx.lineTo(w/4, -h/2+15);
+  ctx.closePath();
+  ctx.fillStyle = "#20272e";
+  ctx.globalAlpha = 0.92;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "#191919";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-w/7, -h/2+28);
+  ctx.lineTo(-w/7, -h/2+36);
+  ctx.lineTo(w/7, -h/2+36);
+  ctx.lineTo(w/7, -h/2+28);
+  ctx.closePath();
+  ctx.fillStyle = "#191919";
+  ctx.globalAlpha = 0.93;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#222";
+  ctx.beginPath();
+  ctx.ellipse(-w/2+11, h/2-19, 6.5, 11, 0, 0, 2*Math.PI);
+  ctx.ellipse(w/2-11, h/2-19, 6.5, 11, 0, 0, 2*Math.PI);
+  ctx.ellipse(-w/2+11, -h/2+39, 6.5, 11, 0, 0, 2*Math.PI);
+  ctx.ellipse(w/2-11, -h/2+39, 6.5, 11, 0, 0, 2*Math.PI);
+  ctx.fill();
+  ctx.fillStyle = "#fffde7";
+  ctx.fillRect(-w/6, h/2-13, w/12, 7);
+  ctx.fillRect(w/12, h/2-13, w/12, 7);
+  ctx.fillStyle = "#ff5252";
+  ctx.fillRect(-w/6, -h/2+5, w/12, 6);
+  ctx.fillRect(w/12, -h/2+5, w/12, 6);
+  ctx.restore();
+}
+
+// Game State
+let playerLane, playerY, enemyCars, speed, maxSpeed, speedIncrease, score, distance, gameOver, retryPromptAlpha, frameCount;
+
+function randInt(a, b) { return Math.floor(a + Math.random()*(b-a+1)); }
+
+function setLane(dir) {
+  if (gameOver) return;
+  if (dir === 'left' && playerLane > 0) playerLane--;
+  if (dir === 'right' && playerLane < laneCount-1) playerLane++;
+}
+window.addEventListener('keydown', (e) => {
+  if (!gameOver) {
+    if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') setLane('left');
+    if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') setLane('right');
+  }
+  if (gameOver && e.code === "Space") restartGame();
+});
+
+// Drawing
+function drawBackground() {
+  drawGrass();
+  drawRoad();
+  for (let t of trees) drawTree(t.x, t.y);
+}
+function drawGameOver() {
+  ctx.save();
+  ctx.globalAlpha = 0.86;
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0, h/2-90, w, 160);
+  ctx.globalAlpha = 1;
+  ctx.font = "bold 3.2em 'Segoe UI', Arial, sans-serif";
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.fillText("GAME OVER", w/2, h/2-18);
+  ctx.font = "1.5em Arial";
+  ctx.fillStyle = "#ffeb3b";
+  ctx.fillText(`Score: ${score}`, w/2, h/2+26);
+  ctx.font = "1.1em Arial";
+  retryPromptAlpha = Math.abs(Math.sin(Date.now()/330));
+  ctx.globalAlpha = 0.5 + 0.5*retryPromptAlpha;
+  ctx.fillStyle = "#fff";
+  ctx.fillText("Press SPACE to retry", w/2, h/2+62);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// Enemy Spawning
+let enemySpawnInterval;
+function spawnEnemy() {
+  let availableLanes = [0, 1, 2];
+  for (const enemy of enemyCars) {
+    if (enemy.y < 90) availableLanes = availableLanes.filter(l => l !== enemy.lane);
+  }
+  if (availableLanes.length === 0) return;
+  let lane = availableLanes[randInt(0, availableLanes.length-1)];
+  let which = Math.random();
+  let carType;
+  if (which < 0.20) carType = "truck";
+  else if (which < 0.46) carType = "red";
+  else if (which < 0.73) carType = "blue";
+  else carType = "white";
+  enemyCars.push({
+    type: carType,
+    lane: lane,
+    x: roadLeft() + lane*laneWidth + laneWidth/2,
+    y: carType === "truck" ? -TRUCK_HEIGHT : -CAR_HEIGHT,
+  });
+}
+function startEnemySpawner() {
+  if (enemySpawnInterval) clearInterval(enemySpawnInterval);
+  enemySpawnInterval = setInterval(spawnEnemy, 1150);
+}
+
+// Game Logic
+function update() {
+  if (gameOver) return;
+  frameCount++;
+  speed = Math.min(maxSpeed, speed + speedIncrease);
+  distance += speed/60;
+  score = Math.floor(distance);
+  for (let t of trees) {
+    t.y += speed * 0.65;
+    if (t.y > h + 18) t.y = -18;
+  }
+  for (let i = enemyCars.length-1; i >=0; i--) {
+    if (enemyCars[i].type === "truck") enemyCars[i].y += speed*0.95;
+    else enemyCars[i].y += speed;
+    if (enemyCars[i].y > h+200) enemyCars.splice(i,1);
+  }
+  let px = roadLeft() + playerLane * laneWidth + laneWidth/2;
+  let carA = {x: px, y: playerY, w: CAR_WIDTH-8, h: CAR_HEIGHT-8};
+  for (const enemy of enemyCars) {
+    let ex = enemy.x, ey = enemy.y;
+    let ew, eh;
+    if (enemy.type === "truck") {
+      ew = TRUCK_WIDTH-8;
+      eh = TRUCK_HEIGHT-8;
+    } else {
+      ew = CAR_WIDTH-8;
+      eh = CAR_HEIGHT-8;
+    }
+    let carB = {x: ex, y: ey, w: ew, h: eh};
+    if (
+      Math.abs(carA.x - carB.x) < (carA.w+carB.w)/2 &&
+      Math.abs(carA.y - carB.y) < (carA.h+carB.h)/2
+    ) {
+      endGame();
+      return;
+    }
+  }
+}
+function endGame() {
+  gameOver = true;
+  clearInterval(enemySpawnInterval);
+}
+function draw() {
+  ctx.clearRect(0, 0, w, h);
+  drawBackground();
+  for (let e of enemyCars) {
+    if (e.type === "red") drawRedSportsCar(ctx, e.x, e.y);
+    else if (e.type === "blue") drawBlueSportsCar(ctx, e.x, e.y);
+    else if (e.type === "white") drawWhiteSportsCar(ctx, e.x, e.y);
+    else if (e.type === "truck") drawTruckCar(ctx, e.x, e.y);
+  }
+  let px = roadLeft() + playerLane * laneWidth + laneWidth/2;
+  drawRedSportsCar(ctx, px, playerY);
+  if (gameOver) drawGameOver();
+}
+function gameLoop() {
+  update();
+  draw();
+  if (!gameOver) {
+    scoreDiv.textContent = `🏁 Score: ${score}`;
+    requestAnimationFrame(gameLoop);
+  } else {
+    scoreDiv.textContent = "";
+    requestAnimationFrame(draw);
+  }
+}
+
+window.addEventListener('resize', () => {
+  w = window.innerWidth;
+  h = window.innerHeight;
+  canvas.width = w; canvas.height = h;
+  addTrees();
+  playerY = h - 110;
+});
+
+function restartGame() {
+  playerLane = 1;
+  playerY = h - 110;
+  enemyCars = [];
+  speed = 4.2;
+  maxSpeed = 10.5;
+  speedIncrease = 0.00035;
+  score = 0;
+  distance = 0;
+  frameCount = 0;
+  gameOver = false;
+  addTrees();
+  startEnemySpawner();
+  gameLoop();
+}
+
+restartGame();
